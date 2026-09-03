@@ -1,0 +1,7 @@
+requests
+beautifulsoup4
+pandas
+jinja2
+html5lib
+selenium
+webdriver-manager
