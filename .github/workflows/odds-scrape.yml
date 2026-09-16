@@ -23,4 +23,4 @@ jobs:
       
       - name: Run all sports odds scrape
         run: |
-          ./run_all.sh
+          python run_all.py
