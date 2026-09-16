@@ -21,6 +21,8 @@ This repository is the single active project consolidating the original NBA `odd
 
 The `props/covers_props.py` command separately collects NFL or MLB props from Covers' client-rendered props pages and can print a table or write JSON/CSV. The project does not place bets, persist historical runs, expose an API, or provide a web server.
 
+`run_all.py` is the consolidated entry point. It checks all four game sports and both supported props sports, then prints one global ranking of the strongest collected edges.
+
 ## AI Handoff: Goals And Progress
 
 ### Project Goals
@@ -155,6 +157,21 @@ Filter props and choose structured output:
 ./props/run_covers_props.sh --format json --output props.json
 ./props/run_covers_props.sh --format csv --output props.csv
 ```
+
+Run the complete cross-sport scan and print one global edge ranking:
+
+```bash
+./run_all.sh
+```
+
+The scan checks NBA, MLB, NFL, and NCAAF game odds, then NFL and MLB player props. Set `ODDS_API_KEY` first if The Odds API prices should be included:
+
+```bash
+export ODDS_API_KEY="your-api-key"
+./run_all.sh --limit 25
+```
+
+`--limit` controls both the number of props considered per props sport and the number of global results printed. Use `--outlier-method zscore` or `--outlier-method iqr` to enable game-odds outlier filtering.
 
 The game-odds run always writes raw collected data to `odds_data.json`, even when no HTML output is requested. HTML generation is optional and is enabled only when `--output` is supplied.
 

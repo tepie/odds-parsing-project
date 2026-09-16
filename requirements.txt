@@ -1,6 +1,7 @@
 requests
 beautifulsoup4
 pandas
+numpy
 jinja2
 html5lib
 selenium
