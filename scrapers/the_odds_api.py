@@ -7,7 +7,9 @@ from models.odds import Odds
 ODDS_API_BASE = "https://api.the-odds-api.com/v4/sports/{sport_key}/odds"
 
 SPORT_KEYS = {
+    'nba': 'basketball_nba',
     'mlb': 'baseball_mlb',
+    'nfl': 'americanfootball_nfl',
     'ncaaf': 'americanfootball_ncaaf',
 }
 

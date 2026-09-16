@@ -1,8 +1,8 @@
 import json
 import requests
 from typing import List
-from models.odds import Odds, Projection, OddsComparison
-from scrapers import crazyninjaodds, crazyninjaodds_ncaaf, covers, covers_ncaaf, oddsshark, actionnetwork, the_odds_api
+from models.odds import Odds, Projection
+from scrapers import covers_ncaaf, the_odds_api
 import time
 
 def normalize_odds(odds_list: List[Odds]) -> List[Odds]:
@@ -25,43 +25,19 @@ def normalize_odds(odds_list: List[Odds]) -> List[Odds]:
 
 def collect_all_data(sport: str = 'mlb') -> dict:
     """
-    Scrape all sites and return combined data
+    Scrape Covers and optional supplemental API data.
     """
-    covers_odds = []
-    if sport == 'mlb':
-        print("Scraping crazyninjaodds...")
-        cn_odds = normalize_odds(crazyninjaodds.scrape_crazyninjaodds())
-        time.sleep(2)
+    if sport not in {'nba', 'mlb', 'nfl', 'ncaaf'}:
+        raise ValueError(f'Unsupported sport: {sport}')
 
-        print("Scraping covers...")
-        covers_projs = covers.scrape_covers_projections()
-        time.sleep(2)
-
-        print("Scraping oddsshark...")
-        os_odds = normalize_odds(oddsshark.scrape_oddsshark())
-        time.sleep(2)
-
-        print("Scraping actionnetwork...")
-        an_odds = normalize_odds(actionnetwork.scrape_actionnetwork())
-        time.sleep(2)
-    else:
-        print("Scraping CrazyNinjaOdds NCAAF positive EV...")
-        cn_odds = normalize_odds(crazyninjaodds_ncaaf.scrape_crazyninjaodds_ncaaf())
-        time.sleep(2)
-
-        print("Scraping Covers NCAAF picks...")
-        covers_odds, covers_projs = covers_ncaaf.scrape_covers_ncaaf_data()
-        covers_odds = normalize_odds(covers_odds)
-        os_odds = []
-        an_odds = []
+    print(f"Scraping Covers {sport.upper()} picks...")
+    covers_odds, covers_projs = covers_ncaaf.scrape_covers_picks_data(sport)
+    covers_odds = normalize_odds(covers_odds)
+    time.sleep(2)
     
     print("Scraping the odds API...")
     try:
         api_markets = 'h2h,spreads,totals'
-        if sport == 'ncaaf':
-            # Quarter/half markets are supplied by CrazyNinjaOdds. The Odds API
-            # accepts the stable full-game NCAAF markets here.
-            api_markets = 'spreads,totals'
         api_odds = normalize_odds(the_odds_api.scrape_the_odds_api(sport=sport, markets=api_markets))
     except ValueError as exc:
         print(f"Skipping Odds API source: {exc}")
@@ -70,7 +46,7 @@ def collect_all_data(sport: str = 'mlb') -> dict:
         print(f"Skipping Odds API source after request failure: {exc}")
         api_odds = []
     
-    all_odds = cn_odds + covers_odds + os_odds + an_odds + api_odds
+    all_odds = covers_odds + api_odds
     all_projections = covers_projs
     
     data = {

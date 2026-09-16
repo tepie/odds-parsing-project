@@ -8,7 +8,50 @@ from bs4 import BeautifulSoup
 from models.odds import Odds, Projection
 
 
-URL = 'https://www.covers.com/picks/ncaaf'
+SPORT_URLS = {
+    'nba': 'https://www.covers.com/picks/nba',
+    'mlb': 'https://www.covers.com/picks/mlb',
+    'nfl': 'https://www.covers.com/picks/nfl',
+    'ncaaf': 'https://www.covers.com/picks/ncaaf',
+}
+
+TEAM_ALIASES = {
+    'nfl': {
+        'ari': 'Arizona Cardinals', 'atl': 'Atlanta Falcons', 'bal': 'Baltimore Ravens',
+        'buf': 'Buffalo Bills', 'car': 'Carolina Panthers', 'chi': 'Chicago Bears',
+        'cin': 'Cincinnati Bengals', 'cle': 'Cleveland Browns', 'dal': 'Dallas Cowboys',
+        'den': 'Denver Broncos', 'det': 'Detroit Lions', 'gb': 'Green Bay Packers',
+        'hou': 'Houston Texans', 'ind': 'Indianapolis Colts', 'jax': 'Jacksonville Jaguars',
+        'kc': 'Kansas City Chiefs', 'lv': 'Las Vegas Raiders', 'lac': 'Los Angeles Chargers',
+        'lar': 'Los Angeles Rams', 'mia': 'Miami Dolphins', 'min': 'Minnesota Vikings',
+        'ne': 'New England Patriots', 'no': 'New Orleans Saints', 'nyg': 'New York Giants',
+        'nyj': 'New York Jets', 'phi': 'Philadelphia Eagles', 'pit': 'Pittsburgh Steelers',
+        'sf': 'San Francisco 49ers', 'sea': 'Seattle Seahawks', 'tb': 'Tampa Bay Buccaneers',
+        'ten': 'Tennessee Titans', 'was': 'Washington Commanders',
+    },
+}
+
+
+def _event_for_card(card) -> tuple[str | None, dict[str, str]]:
+    """Extract a readable matchup and team aliases from a Covers game card."""
+    link = card.select_one('a[aria-label*=" at "]')
+    if not link:
+        return None, {}
+
+    label = link.get('aria-label', '')
+    match = re.search(r'for (.+?) at (.+?)$', label, re.IGNORECASE)
+    if not match:
+        return None, {}
+
+    away, home = match.groups()
+    event = f'{away} @ {home}'
+    aliases = {}
+    for team in (away, home):
+        words = re.findall(r'[A-Za-z]+', team)
+        aliases[''.join(word[0] for word in words).lower()] = team
+        aliases[''.join(words[0])[:3].lower()] = team
+        aliases[''.join(words[-1])[:3].lower()] = team
+    return event, aliases
 
 
 def american_to_decimal(odds_value: str) -> float:
@@ -38,13 +81,21 @@ def parse_market_cell(text: str, market: str):
 
 def scrape_covers_ncaaf_picks() -> List[Odds]:
     """Scrape Covers' listed NCAAF game prices from the picks page."""
-    odds_list, _ = scrape_covers_ncaaf_data()
+    odds_list, _ = scrape_covers_picks_data('ncaaf')
     return odds_list
 
 
 def scrape_covers_ncaaf_data():
     """Return Covers NCAAF game prices and predicted-score projections."""
-    response = requests.get(URL, timeout=30, headers={'User-Agent': 'Mozilla/5.0'})
+    return scrape_covers_picks_data('ncaaf')
+
+
+def scrape_covers_picks_data(sport: str):
+    """Return Covers game prices and predicted-score projections for a sport."""
+    if sport not in SPORT_URLS:
+        raise ValueError(f'Unsupported Covers sport: {sport}')
+
+    response = requests.get(SPORT_URLS[sport], timeout=30, headers={'User-Agent': 'Mozilla/5.0'})
     response.raise_for_status()
     soup = BeautifulSoup(response.text, 'html5lib')
     timestamp = datetime.now().isoformat()
@@ -85,6 +136,12 @@ def scrape_covers_ncaaf_data():
         if not team or team.lower() in {'team', 'matchup'}:
             continue
 
+        card = row.find_parent(id=re.compile(r'^computer-picks-\d+$'))
+        event, aliases = _event_for_card(card) if card else (None, {})
+        team_code = team.split()[0].lower()
+        full_team = TEAM_ALIASES.get(sport, {}).get(team_code, aliases.get(team_code, team))
+        player = full_team.lower()
+
         for index, market in ((2, 'spread'), (3, 'total'), (4, 'moneyline')):
             if index >= len(cells):
                 continue
@@ -102,9 +159,15 @@ def scrape_covers_ncaaf_data():
                 bookmaker=bookmaker,
                 odds=decimal_odds,
                 market=market,
-                player=team.lower(),
+                player=player,
                 timestamp=timestamp,
-                source='CoversNCAAF',
+                source=f'Covers{sport.upper()}',
+                event=event,
+                selection=(
+                    f'{full_team} {cells[index].get_text(" ", strip=True).split()[0]}'
+                    if market != 'moneyline'
+                    else full_team
+                ),
                 line=cells[index].get_text(' ', strip=True).split()[0] if market != 'moneyline' else None,
             ))
 

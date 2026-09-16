@@ -5,3 +5,4 @@ jinja2
 html5lib
 selenium
 webdriver-manager
+playwright>=1.50,<2

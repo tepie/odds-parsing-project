@@ -28,7 +28,7 @@ HTML_TEMPLATE = """
     <p>Generated at: {{ timestamp }}</p>
 
     {% if top_value_bets %}
-    <h2>Top 5 CrazyNinja Value Opportunities</h2>
+    <h2>Top 5 Value Opportunities</h2>
     <table>
         <tr>
             <th>Rank</th>
@@ -60,7 +60,7 @@ HTML_TEMPLATE = """
     {% endif %}
     
     <h2>All Markets Ranked By Value</h2>
-    <p class="muted">Spreads are preferred, followed by first-half and first-quarter spreads, totals, and then moneylines. Combined score weights CNO EV 50%, Covers score support 30%, and market difference 20%.</p>
+    <p class="muted">Markets are ranked by available price and comparison value. Covers is the primary source; The Odds API is included when configured.</p>
     {% for comp in ranked_comparisons %}
     <h3>{{ loop.index }}. {{ comp.event or comp.player }} | {{ comp.market }} | {{ comp.selection or 'Unspecified selection' }}</h3>
     <p>Best available: {{ comp.best_odds.bookmaker if comp.best_odds else 'N/A' }} at {{ decimal_to_american(comp.best_odds.odds) if comp.best_odds else 'N/A' }}{% if comp.best_odds and comp.best_odds.line %} ({{ comp.best_odds.line }}){% endif %}. Market difference: {{ comp.market_difference | round(2) }}% versus median price {{ decimal_to_american(comp.reference_odds) if comp.reference_odds else 'N/A' }}. Score edge: {{ comp.best_odds.score_edge | round(2) if comp.best_odds and comp.best_odds.score_edge is not none else 'N/A' }} points.</p>

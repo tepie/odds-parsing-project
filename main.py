@@ -17,14 +17,14 @@ def decimal_to_american(decimal_odds):
         return int(-100 / (decimal_odds - 1))
 
 def main():
-    parser = argparse.ArgumentParser(description='Consolidate sports odds review')
-    parser.add_argument('--sport', type=str, default='mlb', choices=['mlb', 'ncaaf'], help='Sport to collect (mlb or ncaaf)')
+    parser = argparse.ArgumentParser(description='Consolidate Covers sports odds review')
+    parser.add_argument('--sport', type=str, default='mlb', choices=['nba', 'mlb', 'nfl', 'ncaaf'], help='Sport to collect (nba, mlb, nfl, or ncaaf)')
     parser.add_argument('--market', type=str, default='all', help='Market to focus on (e.g., home_run)')
-    parser.add_argument('--output', type=str, default='odds_report.html', help='Output HTML file')
+    parser.add_argument('--output', type=str, default=None, help='Optional HTML output file')
     parser.add_argument('--outlier-method', type=str, default='zscore', choices=['zscore', 'iqr', 'none'], help='Outlier detection method')
     parser.add_argument('--bookmakers', nargs='+', default=None, help='Optional list of bookmakers to include; defaults to all discovered books')
     parser.add_argument('--min-odds', type=float, default=1.909, help='Minimum decimal odds to include (default: 1.909 = -110 or better)')
-    parser.add_argument('--min-ev', type=float, default=None, help='Minimum EV to include (e.g., -0.10 for -10% or better)')
+    parser.add_argument('--min-ev', type=float, default=None, help='Minimum EV to include (e.g., -0.10 for -10%% or better)')
     
     args = parser.parse_args()
     
@@ -72,10 +72,25 @@ def main():
     comparisons = group_odds_by_player_market(odds_list, projections)
     analyzed = analyze_comparisons(comparisons)
     
-    print("Generating report...")
     timestamp = datetime.now().isoformat()
     top_value_bets = find_top_value_bets(analyzed) if args.sport == 'ncaaf' else []
-    generate_html_report(analyzed, timestamp, args.output, sport=args.sport.upper(), top_value_bets=top_value_bets)
+    print(f"\n{args.sport.upper()} Covers odds summary ({len(odds_list)} retained prices)")
+    print("=" * 88)
+    for comparison in sorted(analyzed.values(), key=lambda item: item.market_difference or 0, reverse=True):
+        best = comparison.best_odds
+        if not best:
+            continue
+        event = best.event or best.player
+        selection = best.selection or best.player
+        print(
+            f"{event} | {comparison.market:<10} | {selection:<28} | "
+            f"best: {best.bookmaker} {decimal_to_american(best.odds):>5} | "
+            f"books: {len(comparison.odds_list)} | "
+            f"market edge: {comparison.market_difference:+.2f}%"
+        )
+
+    if args.output:
+        generate_html_report(analyzed, timestamp, args.output, sport=args.sport.upper(), top_value_bets=top_value_bets)
     
     # Save raw data
     save_data_to_json(data, 'odds_data.json')
