@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Scrape Covers NFL props and rank them by projection edge."""
+"""Scrape Covers NFL or MLB player props and rank them by projection edge."""
 
 from __future__ import annotations
 
@@ -14,7 +14,10 @@ from typing import Iterable
 
 from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError, sync_playwright
 
-DEFAULT_URL = "https://www.covers.com/sport/football/nfl/player-props"
+SPORT_URLS = {
+    "nfl": "https://www.covers.com/sport/football/nfl/player-props",
+    "mlb": "https://www.covers.com/sport/baseball/mlb/player-props",
+}
 PROBABILITY_PROP_TERMS = ("touchdown", "interception")
 MIN_PROBABILITY_PROJECTION = 0.40
 
@@ -46,11 +49,36 @@ def number(value: str | None) -> float | None:
 
 def parse_prop(text: str, odds: str = "", game: str = "") -> Prop | None:
     text = compact(text)
+    game_prop_match = re.search(
+        r"(?P<market>Total|Game Projection)\s+(?P<game>[A-Z]{2,3}\s+@\s+[A-Z]{2,3})\s+"
+        r"(?:Over|Under)\s+(?P<line>\d+(?:\.\d+)?)\s+(?P<kind>Total|Points?)",
+        text,
+        re.I,
+    )
+    if game_prop_match:
+        difference_match = re.search(r"(?P<difference>[+-]?\d+(?:\.\d+)?)\s+DIFFERENCE", text, re.I)
+        projection_match = re.search(r"(?P<projection>[+-]?\d+(?:\.\d+)?)\s+PROJECTION", text, re.I)
+        if difference_match and projection_match:
+            direction = "o" if re.search(r"\bOver\b", text, re.I) else "u"
+            line = number(game_prop_match.group("line"))
+            ev_match = re.search(r"(?P<ev>[+-]?\d+(?:\.\d+)?)%\s+EV", text, re.I)
+            return Prop(
+                player=game_prop_match.group("game"),
+                position="GAME",
+                market=game_prop_match.group("kind"),
+                selection=f"{direction}{line:g} {game_prop_match.group('kind')}",
+                line=line,
+                projection=number(projection_match.group("projection")),
+                difference=number(difference_match.group("difference")) or 0,
+                ev_percent=number(ev_match.group("ev")) if ev_match else None,
+                best_odds=compact(odds),
+                game=game_prop_match.group("game"),
+            )
     player_match = re.search(
         r"(?:[A-Z]{2,3}\s+)?"
         r"(?P<player>(?:[A-Z](?:\.[A-Z])?\.?|[A-Z][A-Za-z.'-]+)"
         r"(?:\s+[A-Z][A-Za-z.'-]*)+)\s+"
-        r"\((?P<position>QB|RB|WR|TE|K|FB)\)",
+        r"\((?P<position>QB|RB|WR|TE|K|FB|P|SP|RP|C|1B|2B|3B|SS|OF|DH)\)",
         text,
     )
     if not player_match:
@@ -118,13 +146,26 @@ def parse_prop(text: str, odds: str = "", game: str = "") -> Prop | None:
     )
 
 
-def reveal_more_props(page: Page, prop_types: list[str]) -> None:
+def reveal_more_props(page: Page, sport: str, prop_types: list[str]) -> None:
     terms = " ".join(prop_types).casefold()
     market_name = None
-    if "touchdown" in terms:
+    if sport == "nfl" and "touchdown" in terms:
         market_name = "nfl_game_player_score_touchdown"
-    elif "interception" in terms:
+    elif sport == "nfl" and "interception" in terms:
         market_name = "nfl_game_player_passing_interception"
+    elif sport == "mlb":
+        market_names = {
+            "hit": "mlb_game_player_hits_runs_rbis",
+            "home run": "mlb_game_player_home_runs",
+            "homerun": "mlb_game_player_home_runs",
+            "strikeout": "mlb_game_player_pitcher_strikeouts",
+            "rbi": "mlb_game_player_rbis",
+            "base": "mlb_game_player_bases",
+        }
+        market_name = next(
+            (market for term, market in market_names.items() if term in terms),
+            None,
+        )
 
     if not market_name:
         return
@@ -151,6 +192,8 @@ def reveal_more_props(page: Page, prop_types: list[str]) -> None:
         timeout=10_000,
     )
     label = "Anytime Touchdown" if "touchdown" in terms else "Interceptions Thrown"
+    if sport == "mlb":
+        return
     page.wait_for_function(
         """label => Array.from(document.querySelectorAll(
             '.game-projections-container'
@@ -160,8 +203,8 @@ def reveal_more_props(page: Page, prop_types: list[str]) -> None:
     )
 
 
-def extract_props(page: Page, prop_types: list[str]) -> list[Prop]:
-    reveal_more_props(page, prop_types)
+def extract_props(page: Page, sport: str, prop_types: list[str]) -> list[Prop]:
+    reveal_more_props(page, sport, prop_types)
     page.wait_for_selector(".game-projections-container", state="attached", timeout=30_000)
     row_locator = page.locator(".game-projections-container")
     terms = " ".join(prop_types).casefold()
@@ -239,7 +282,8 @@ def is_reportable_edge(prop: Prop) -> bool:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--url", default=DEFAULT_URL)
+    parser.add_argument("--sport", choices=tuple(SPORT_URLS), default="nfl")
+    parser.add_argument("--url", help="Override the default Covers props URL")
     parser.add_argument("--limit", type=int, default=25)
     parser.add_argument("--prop-type", action="append", default=[], metavar="TEXT",
                         help="Keep props whose market or selection contains TEXT; repeat or use commas for alternatives")
@@ -252,8 +296,8 @@ def main() -> int:
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(headless=not args.headed)
             page = browser.new_page(viewport={"width": 1440, "height": 1000})
-            page.goto(args.url, wait_until="domcontentloaded", timeout=60_000)
-            props = filter_props(extract_props(page, args.prop_type), args.prop_type)[: max(args.limit, 0)]
+            page.goto(args.url or SPORT_URLS[args.sport], wait_until="domcontentloaded", timeout=60_000)
+            props = filter_props(extract_props(page, args.sport, args.prop_type), args.prop_type)[: max(args.limit, 0)]
             browser.close()
     except PlaywrightTimeoutError as error:
         print(f"Timed out waiting for Covers props: {error}", file=sys.stderr)
