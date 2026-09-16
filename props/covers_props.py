@@ -267,6 +267,7 @@ def filter_props(props: Iterable[Prop], prop_types: list[str]) -> list[Prop]:
     terms.extend(term[:-1] for term in terms if term in ("touchdowns", "interceptions"))
     filtered = [
         prop for prop in props
+        if prop.position != "GAME"
         if not terms or any(term in f"{prop.market} {prop.selection}".casefold() for term in terms)
     ]
     return [prop for prop in filtered if is_reportable_edge(prop)]

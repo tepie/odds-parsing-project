@@ -2,7 +2,7 @@ import json
 import requests
 from typing import List
 from models.odds import Odds, Projection
-from scrapers import covers_ncaaf, the_odds_api
+from scrapers import covers_games, the_odds_api
 import time
 
 def normalize_odds(odds_list: List[Odds]) -> List[Odds]:
@@ -31,7 +31,7 @@ def collect_all_data(sport: str = 'mlb') -> dict:
         raise ValueError(f'Unsupported sport: {sport}')
 
     print(f"Scraping Covers {sport.upper()} picks...")
-    covers_odds, covers_projs = covers_ncaaf.scrape_covers_picks_data(sport)
+    covers_odds, covers_projs = covers_games.scrape_covers_picks_data(sport)
     covers_odds = normalize_odds(covers_odds)
     time.sleep(2)
     

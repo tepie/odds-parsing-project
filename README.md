@@ -77,7 +77,7 @@ analysis/outliers.py       Z-score and IQR filtering
 reports/generator.py       Inline Jinja2 HTML report template
 scrapers/
   covers.py                Legacy Covers player-projection scraper
-  covers_ncaaf.py          Covers NBA/MLB/NFL/NCAAF game-picks scraper
+  covers_games.py          Covers NBA/MLB/NFL/NCAAF game-picks scraper
   the_odds_api.py          Optional The Odds API integration
 props/
   covers_props.py          Covers NFL/MLB player-props scraper and CLI
@@ -268,11 +268,12 @@ These are the most important facts for the next contributor:
 - The default minimum odds filter runs before comparison and may exclude otherwise useful prices.
 - The default bookmaker list includes `NoviG`; matching is case-insensitive, so it matches `Novig`, but bookmaker aliases are not otherwise normalized.
 - The Odds API integration defaults to game-level `h2h`, `spreads`, and `totals` markets.
+- The global scanner only ranks game markets when it has at least two comparable prices and a positive market difference; props and game odds use different edge scales and should be interpreted separately.
 - The legacy scraper modules remain in the tree for reference but are not active collection sources.
 - The props workflow requires a browser because Covers renders player props client-side.
 - The checked-in `odds_data.json` and `odds_report.html` are snapshots, not guaranteed current data.
 - Generated report headings use the selected sport (`NBA`, `MLB`, `NFL`, or `NCAAF`).
-- There are no test files or configuration files in the repository. When changing parsing or matching, add fixture-based tests before relying on live websites.
+- Unit tests cover odds conversion, market-cell parsing, normalization, supported sports, player-prop parsing, and exclusion of game projections from player props.
 
 ## Recommended Continuation Order
 
@@ -281,7 +282,18 @@ These are the most important facts for the next contributor:
 3. Replace table assumptions with fixture-backed Covers parsers for NBA, MLB, NFL, and NCAAF.
 4. Extract stable matchup identifiers and normalize bookmaker aliases and market names.
 5. Move EV/reference calculation before `--min-ev`, or rename the option to reflect that it is a relative percentage.
-6. Add fixture-based tests for the game and player-props parsers.
+6. Expand fixture-based tests for live Covers HTML variations and player-props market selectors.
+
+## Validation
+
+Run the local unit tests and syntax checks:
+
+```bash
+.venv/bin/python -m unittest discover -s tests -v
+.venv/bin/python -m compileall -q main.py run_all.py analysis models props reports scrapers tests
+```
+
+Live source checks require network access and a configured `ODDS_API_KEY` for The Odds API supplementation. They should be run manually through `./run_all.sh` and the props launcher rather than treated as deterministic unit tests.
 
 ## Output And Safety Notes
 

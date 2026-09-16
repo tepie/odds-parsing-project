@@ -79,17 +79,6 @@ def parse_market_cell(text: str, market: str):
     return match.group('price'), match.group('book').strip()
 
 
-def scrape_covers_ncaaf_picks() -> List[Odds]:
-    """Scrape Covers' listed NCAAF game prices from the picks page."""
-    odds_list, _ = scrape_covers_picks_data('ncaaf')
-    return odds_list
-
-
-def scrape_covers_ncaaf_data():
-    """Return Covers NCAAF game prices and predicted-score projections."""
-    return scrape_covers_picks_data('ncaaf')
-
-
 def scrape_covers_picks_data(sport: str):
     """Return Covers game prices and predicted-score projections for a sport."""
     if sport not in SPORT_URLS:

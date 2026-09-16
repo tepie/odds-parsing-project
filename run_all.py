@@ -6,11 +6,14 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass
 
+import requests
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+
 from analysis.comparator import analyze_comparisons, group_odds_by_player_market
 from analysis.normalizer import collect_all_data
 from analysis.outliers import remove_outliers
 from models.odds import Odds, Projection
-from props.covers_props import Prop, extract_props, filter_props
+from props.covers_props import extract_props, filter_props
 from playwright.sync_api import sync_playwright
 
 
@@ -47,14 +50,17 @@ def collect_game_edges(sport: str, outlier_method: str) -> list[Edge]:
     )
     edges = []
     for comparison in comparisons.values():
-        if not comparison.best_odds:
+        if not comparison.best_odds or len(comparison.odds_list) < 2:
+            continue
+        market_edge = comparison.market_difference or 0
+        if market_edge <= 0:
             continue
         best = comparison.best_odds
         event = best.event or best.player
         selection = best.selection or best.player
         edges.append(
             Edge(
-                score=comparison.market_difference or 0,
+                score=market_edge,
                 sport=sport.upper(),
                 kind="GAME",
                 description=f"{event} | {comparison.market} | {selection}",
@@ -116,14 +122,14 @@ def main() -> int:
         print(f"Collecting {sport.upper()} game odds...", flush=True)
         try:
             edges.extend(collect_game_edges(sport, args.outlier_method))
-        except Exception as error:
+        except (ValueError, requests.RequestException, OSError) as error:
             print(f"Skipped {sport.upper()} game odds: {error}")
 
     for sport in PROP_SPORTS:
         print(f"Collecting {sport.upper()} player props...", flush=True)
         try:
             edges.extend(collect_prop_edges(sport, args.limit))
-        except Exception as error:
+        except (PlaywrightTimeoutError, OSError, ValueError) as error:
             print(f"Skipped {sport.upper()} props: {error}")
 
     edges.sort(key=lambda edge: edge.score, reverse=True)
