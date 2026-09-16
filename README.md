@@ -1,8 +1,8 @@
 # Covers Sports Odds Project
 
-A Python scraper and reporting pipeline focused on Covers.com for NBA, MLB, NFL, and NCAAF betting odds and NFL player props. It normalizes prices into a common model, compares bookmakers, filters records, and provides console-oriented reports.
+A public Python scraper and reporting pipeline focused on Covers.com for NBA, MLB, NFL, and NCAAF betting odds and NFL/MLB player props. It normalizes prices into a common model, compares bookmakers, filters records, and provides console-oriented reports.
 
-This repository is the active successor to the original NBA `oddsparser` experiment. Covers is the primary source; The Odds API is an optional supplement. Treat generated reports as inspection aids, not production betting or pricing systems.
+This repository is the single active project consolidating the original NBA `oddsparser` experiment and the `covers-props` player-props scraper. The former `oddsparser` repository is archived, and the former `covers-props` repository has been consolidated here. Covers is the primary source; The Odds API is an optional supplement. Treat generated reports as inspection aids, not production betting or pricing systems.
 
 ## What It Does
 
@@ -30,7 +30,7 @@ The `props/covers_props.py` command separately collects NFL or MLB props from Co
 - Compare available prices and identify the strongest value opportunities.
 - Preserve the original NBA use case as an explicit sport filter.
 - Make Covers the primary and maintained odds source across NBA, MLB, NFL, and NCAAF.
-- Produce useful console output for each selected sport.
+- Produce useful console output by default for each selected sport.
 - Collect NFL and MLB props with projection edge, EV, visible odds, and game context.
 - Keep the pipeline easy for another AI session to inspect, test, and extend.
 
@@ -42,7 +42,9 @@ The `props/covers_props.py` command separately collects NFL or MLB props from Co
 - Added odds metadata for event, selection, line, fair odds, and source-published EV.
 - Added event/market/selection grouping support for records that provide those fields.
 - Replaced the active OddsShark, Action Network, and CrazyNinja collection paths with Covers.
-- Moved the `covers-props` scraper into `props/` as the NFL/MLB player-props workflow.
+- Consolidated the `covers-props` scraper into `props/` as the NFL/MLB player-props workflow.
+- Archived the former `oddsparser` GitHub repository; its local clone is no longer retained.
+- Removed the former `covers-props` local clone after consolidating its implementation here.
 - Updated this README with setup, runtime behavior, limitations, and continuation guidance.
 
 ### Current Working Behavior
@@ -89,7 +91,7 @@ odds_report.html           Checked-in example report
 - Internet access to Covers and optionally The Odds API
 - Internet access to the scraped sites
 - `ODDS_API_KEY` only when The Odds API source should be included
-- Playwright Chromium for the NFL props workflow
+- Playwright Chromium for the NFL and MLB props workflows
 
 `webdriver-manager` attempts to obtain a compatible ChromeDriver automatically. The first Selenium run may therefore require network access and a locally installed Chrome browser.
 
@@ -117,7 +119,7 @@ source .venv/bin/activate
 
 ## Run The App
 
-Basic console run:
+Basic console run (the default reporting mode):
 
 ```bash
 python main.py
@@ -154,7 +156,7 @@ Filter props and choose structured output:
 ./props/run_covers_props.sh --format csv --output props.csv
 ```
 
-The game-odds run always writes raw collected data to `odds_data.json`, even when no HTML output is requested.
+The game-odds run always writes raw collected data to `odds_data.json`, even when no HTML output is requested. HTML generation is optional and is enabled only when `--output` is supplied.
 
 Example focused run:
 
