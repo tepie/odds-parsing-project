@@ -63,7 +63,13 @@ def calculate_score_edge(odds: Odds, projection: Projection) -> float:
         team = match.group(1).lower().strip()
         line = float(match.group(2))
         away, home = [part.strip().lower() for part in projection.event.split('@', 1)]
-        team_margin = projection.projected_spread if team in home else -projection.projected_spread if team in away else None
+        team_margin = (
+            projection.projected_spread
+            if _team_label_matches(team, home)
+            else -projection.projected_spread
+            if _team_label_matches(team, away)
+            else None
+        )
         return team_margin + line if team_margin is not None else 0
     if odds.market == 'total':
         match = re.search(r'([ou])\s*([+-]?\d+(?:\.\d+)?)$', odds.selection, re.IGNORECASE)
@@ -72,6 +78,47 @@ def calculate_score_edge(odds: Odds, projection: Projection) -> float:
         line = float(match.group(2))
         return projection.projected_total - line if match.group(1).lower() == 'o' else line - projection.projected_total
     return 0
+
+
+def _team_label_matches(label: str, team: str) -> bool:
+    """Match Covers abbreviations such as ``PITT PITT`` to full team names."""
+    label_tokens = {token for token in re.findall(r"[a-z0-9]+", label.lower()) if len(token) >= 3}
+    team_words = re.findall(r"[a-z0-9]+", team.lower())
+    initials = ''.join(word[0] for word in team_words)
+    return any(
+        token in team_words
+        or any(word.startswith(token) for word in team_words)
+        or token == initials
+        for token in label_tokens
+    )
+
+
+def projection_recommendation(odds: Odds) -> str | None:
+    """Describe the Covers score-model side supported by an odds record."""
+    if not odds.event or odds.projected_spread is None:
+        return None
+    if odds.market == 'spread' and odds.score_edge is not None:
+        if odds.score_edge <= 0:
+            return None
+        return f"{odds.selection} ({odds.score_edge:+.1f} pts)"
+    if odds.market == 'total' and odds.score_edge is not None:
+        line_match = re.search(r'([ou])\s*([+-]?\d+(?:\.\d+)?)$', odds.selection, re.IGNORECASE)
+        if not line_match or odds.projected_total is None:
+            return None
+        line = float(line_match.group(2))
+        projected_over = odds.projected_total > line
+        direction = 'OVER' if projected_over else 'UNDER'
+        if line_match.group(1).lower() == 'u':
+            direction = 'UNDER' if not projected_over else 'OVER'
+        return f"{direction} {odds.line} ({abs(odds.score_edge):.1f} pts)"
+    if odds.market == 'moneyline':
+        away, home = [part.strip() for part in odds.event.split('@', 1)]
+        model_team = home if odds.projected_spread > 0 else away
+        # The Covers line scraper does not expose a moneyline favorite
+        # independently; only report a model side, not a fabricated ML edge.
+        if odds.selection and _team_label_matches(odds.selection, model_team):
+            return f"Model side: {model_team}"
+    return None
 
 
 def attach_score_value(odds: Odds, projections: List[Projection]) -> None:

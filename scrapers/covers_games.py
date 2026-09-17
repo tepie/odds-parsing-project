@@ -91,30 +91,38 @@ def scrape_covers_picks_data(sport: str):
     odds_list: List[Odds] = []
     projections: List[Projection] = []
 
-    for link in soup.find_all('a', href=re.compile(r'/matchup/')):
-        link_text = ' '.join(link.get_text(' ', strip=True).split())
-        matchup = re.search(r'for (.+?) at (.+?)(?:$|\s+\|)', link_text, re.IGNORECASE)
-        if not matchup:
+    for card in soup.select('[id^="computer-picks-"]'):
+        matchup_link = card.select_one('a[aria-label*=" at "]')
+        if not matchup_link:
             continue
-        event = f'{matchup.group(1).strip()} @ {matchup.group(2).strip()}'
-        ancestor = link
-        card_text = ''
-        for _ in range(5):
-            ancestor = ancestor.parent
-            if not ancestor:
+        matchup = re.search(
+            r'for (.+?) at (.+?)$',
+            matchup_link.get('aria-label', ''),
+            re.IGNORECASE,
+        )
+        rows = card.select('table.game-prediction-odds-table tbody tr')
+        if not matchup or len(rows) < 2:
+            continue
+        scores = []
+        for row in rows[:2]:
+            cells = row.find_all(['th', 'td'])
+            if len(cells) < 2:
                 break
-            card_text = ' '.join(ancestor.get_text(' ', strip=True).split())
-            if 'Predicted Score' in card_text and re.search(r'\d+(?:\.\d+)?\s*@\s*\d+(?:\.\d+)?', card_text):
+            score = re.search(r'\d+(?:\.\d+)?', cells[1].get_text(' ', strip=True))
+            if not score:
                 break
-        score_match = re.search(r'Predicted Score.*?(\d+(?:\.\d+)?)\s*@\s*(\d+(?:\.\d+)?)', card_text, re.IGNORECASE)
-        if score_match:
-            away_score = float(score_match.group(1))
-            home_score = float(score_match.group(2))
-            projections.append(Projection(
-                site='covers', player=event.lower(), market='score', projection=home_score - away_score,
-                timestamp=timestamp, event=event, away_score=away_score, home_score=home_score,
-                projected_spread=home_score - away_score, projected_total=home_score + away_score,
-            ))
+            scores.append(float(score.group(0)))
+        if len(scores) != 2:
+            continue
+        away, home = matchup.groups()
+        event = f'{away.strip()} @ {home.strip()}'
+        projections.append(Projection(
+            site='covers', player=event.lower(), market='score',
+            projection=scores[1] - scores[0], timestamp=timestamp, event=event,
+            away_score=scores[0], home_score=scores[1],
+            projected_spread=scores[1] - scores[0],
+            projected_total=scores[0] + scores[1],
+        ))
 
     for row in soup.find_all('tr'):
         cells = row.find_all(['th', 'td'])

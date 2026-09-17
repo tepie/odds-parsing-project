@@ -9,7 +9,12 @@ from dataclasses import dataclass
 import requests
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
-from analysis.comparator import analyze_comparisons, group_odds_by_player_market
+from analysis.comparator import (
+    analyze_comparisons,
+    group_odds_by_player_market,
+    projection_recommendation,
+    _team_label_matches,
+)
 from analysis.normalizer import collect_all_data
 from analysis.outliers import remove_outliers
 from models.odds import Odds, Projection
@@ -30,8 +35,8 @@ class Edge:
     detail: str
 
 
-def collect_game_edges(sport: str, outlier_method: str) -> list[Edge]:
-    data = collect_all_data(sport)
+def collect_game_edges(sport: str, outlier_method: str, include_api: bool = False) -> list[Edge]:
+    data = collect_all_data(sport, include_api=include_api)
     odds = [Odds(**item) for item in data["odds"]]
     projections = [Projection(**item) for item in data["projections"]]
 
@@ -49,24 +54,67 @@ def collect_game_edges(sport: str, outlier_method: str) -> list[Edge]:
         group_odds_by_player_market(odds, projections)
     )
     edges = []
+    moneylines: dict[str, list[Odds]] = {}
     for comparison in comparisons.values():
-        if not comparison.best_odds or len(comparison.odds_list) < 2:
-            continue
-        market_edge = comparison.market_difference or 0
-        if market_edge <= 0:
+        if not comparison.best_odds:
             continue
         best = comparison.best_odds
+        if best.market == "moneyline" and best.event:
+            moneylines.setdefault(best.event, []).append(best)
+        model_edge = best.score_edge if best.score_edge and best.score_edge > 0 else 0
+        if model_edge <= 0:
+            continue
         event = best.event or best.player
         selection = best.selection or best.player
+        recommendation = projection_recommendation(best)
+        projection = next(
+            (
+                item for item in projections
+                if item.event and best.event and item.event.lower() == best.event.lower()
+            ),
+            None,
+        )
         edges.append(
             Edge(
-                score=market_edge,
+                score=model_edge,
                 sport=sport.upper(),
                 kind="GAME",
                 description=f"{event} | {comparison.market} | {selection}",
-                detail=f"{best.bookmaker} {decimal_to_american(best.odds)}",
+                detail=(
+                    (f"predicted {projection.away_score:.2f}-{projection.home_score:.2f} | "
+                     if projection and projection.away_score is not None and projection.home_score is not None
+                     else "")
+                    + (recommendation or f"edge {model_edge:+.2f} pts")
+                ),
             )
         )
+    for event, sides in moneylines.items():
+        projection = next((item for item in projections if item.event and item.event.lower() == event.lower()), None)
+        if not projection or projection.projected_spread is None or len(sides) < 2:
+            continue
+        market_team = min(sides, key=lambda item: item.odds).selection
+        away, home = [part.strip() for part in event.split("@", 1)]
+        model_team = home if projection.projected_spread > 0 else away
+        market_favorite = next(
+            (item for item in sides if item.selection and _team_label_matches(item.selection, market_team or "")),
+            None,
+        )
+        market_favorite_team = market_favorite.selection if market_favorite else market_team
+        if market_favorite_team and not _team_label_matches(market_favorite_team, model_team):
+            model_side = next(
+                (item for item in sides if item.selection and _team_label_matches(item.selection, model_team)),
+                None,
+            )
+            if model_side:
+                edges.append(
+                    Edge(
+                        score=abs(projection.projected_spread),
+                        sport=sport.upper(),
+                        kind="GAME",
+                        description=f"{event} | moneyline upset | {model_team}",
+                        detail=f"predicted margin {projection.projected_spread:+.1f} pts",
+                    )
+                )
     return edges
 
 
@@ -115,13 +163,18 @@ def main() -> int:
         choices=("zscore", "iqr", "none"),
         default="none",
     )
+    parser.add_argument(
+        "--include-odds-api",
+        action="store_true",
+        help="Also query The Odds API; Covers is used by default",
+    )
     args = parser.parse_args()
 
     edges: list[Edge] = []
     for sport in GAME_SPORTS:
         print(f"Collecting {sport.upper()} game odds...", flush=True)
         try:
-            edges.extend(collect_game_edges(sport, args.outlier_method))
+            edges.extend(collect_game_edges(sport, args.outlier_method, args.include_odds_api))
         except (ValueError, requests.RequestException, OSError) as error:
             print(f"Skipped {sport.upper()} game odds: {error}")
 

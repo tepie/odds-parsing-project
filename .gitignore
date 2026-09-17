@@ -56,3 +56,7 @@ desktop.ini
 # pytest reports
 htmlcov/
 *.xml
+
+# Generated scan output
+odds_data.json
+odds_report*.html

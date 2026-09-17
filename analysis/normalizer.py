@@ -23,7 +23,7 @@ def normalize_odds(odds_list: List[Odds]) -> List[Odds]:
         normalized.append(odds)
     return normalized
 
-def collect_all_data(sport: str = 'mlb') -> dict:
+def collect_all_data(sport: str = 'mlb', include_api: bool = False) -> dict:
     """
     Scrape Covers and optional supplemental API data.
     """
@@ -35,16 +35,16 @@ def collect_all_data(sport: str = 'mlb') -> dict:
     covers_odds = normalize_odds(covers_odds)
     time.sleep(2)
     
-    print("Scraping the odds API...")
-    try:
-        api_markets = 'h2h,spreads,totals'
-        api_odds = normalize_odds(the_odds_api.scrape_the_odds_api(sport=sport, markets=api_markets))
-    except ValueError as exc:
-        print(f"Skipping Odds API source: {exc}")
-        api_odds = []
-    except requests.RequestException as exc:
-        print(f"Skipping Odds API source after request failure: {exc}")
-        api_odds = []
+    api_odds = []
+    if include_api:
+        print("Scraping the odds API...")
+        try:
+            api_markets = 'h2h,spreads,totals'
+            api_odds = normalize_odds(the_odds_api.scrape_the_odds_api(sport=sport, markets=api_markets))
+        except ValueError as exc:
+            print(f"Skipping Odds API source: {exc}")
+        except requests.RequestException as exc:
+            print(f"Skipping Odds API source after request failure: {exc}")
     
     all_odds = covers_odds + api_odds
     all_projections = covers_projs

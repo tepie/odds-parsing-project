@@ -5,7 +5,13 @@ import os
 sys.path.append(os.path.dirname(__file__))
 
 from analysis.normalizer import collect_all_data, save_data_to_json
-from analysis.comparator import group_odds_by_player_market, analyze_comparisons, find_top_value_bets
+from analysis.comparator import (
+    group_odds_by_player_market,
+    analyze_comparisons,
+    find_top_value_bets,
+    projection_recommendation,
+    events_match,
+)
 from analysis.outliers import remove_outliers
 from reports.generator import generate_html_report
 from datetime import datetime
@@ -23,13 +29,15 @@ def main():
     parser.add_argument('--output', type=str, default=None, help='Optional HTML output file')
     parser.add_argument('--outlier-method', type=str, default='zscore', choices=['zscore', 'iqr', 'none'], help='Outlier detection method')
     parser.add_argument('--bookmakers', nargs='+', default=None, help='Optional list of bookmakers to include; defaults to all discovered books')
-    parser.add_argument('--min-odds', type=float, default=1.909, help='Minimum decimal odds to include (default: 1.909 = -110 or better)')
+    parser.add_argument('--min-odds', type=float, default=1.0, help='Minimum decimal odds to include (default: 1.0; retain all listed game prices)')
     parser.add_argument('--min-ev', type=float, default=None, help='Minimum EV to include (e.g., -0.10 for -10%% or better)')
+    parser.add_argument('--limit', type=int, default=None, help='Maximum number of ranked results to print')
+    parser.add_argument('--include-odds-api', action='store_true', help='Also query The Odds API; Covers is used by default')
     
     args = parser.parse_args()
     
     print("Collecting data from all sources...")
-    data = collect_all_data(args.sport)
+    data = collect_all_data(args.sport, include_api=args.include_odds_api)
     
     # Convert back to objects
     from models.odds import Odds, Projection
@@ -76,23 +84,55 @@ def main():
     top_value_bets = find_top_value_bets(analyzed) if args.sport == 'ncaaf' else []
     print(f"\n{args.sport.upper()} Covers odds summary ({len(odds_list)} retained prices)")
     print("=" * 88)
-    for comparison in sorted(analyzed.values(), key=lambda item: item.market_difference or 0, reverse=True):
+    def ranking_key(item):
+        best = item.best_odds
+        score_edge = best.score_edge if best and best.score_edge and best.score_edge > 0 else -1
+        return score_edge
+
+    comparisons_with_model_edges = [
+        item for item in analyzed.values()
+        if item.best_odds and item.best_odds.score_edge is not None
+        and item.best_odds.score_edge > 0
+    ]
+    ranked_comparisons = sorted(
+        comparisons_with_model_edges or analyzed.values(),
+        key=ranking_key,
+        reverse=True,
+    )
+    if args.limit is not None:
+        if args.limit < 1:
+            parser.error('--limit must be at least 1')
+        ranked_comparisons = ranked_comparisons[:args.limit]
+
+    for comparison in ranked_comparisons:
         best = comparison.best_odds
         if not best:
             continue
         event = best.event or best.player
         selection = best.selection or best.player
+        projection = next(
+            (
+                item for item in projections
+                if item.event and best.event and events_match(best.event, item.event)
+            ),
+            None,
+        )
+        if not projection or best.score_edge is None:
+            continue
+        predicted = f"{projection.away_score:.2f}-{projection.home_score:.2f}"
+        direction = projection_recommendation(best) or selection
         print(
-            f"{event} | {comparison.market:<10} | {selection:<28} | "
-            f"best: {best.bookmaker} {decimal_to_american(best.odds):>5} | "
-            f"books: {len(comparison.odds_list)} | "
-            f"market edge: {comparison.market_difference:+.2f}%"
+            f"{event} | predicted: {predicted} | "
+            f"{comparison.market:<10} | {direction:<34} | "
+            f"projection edge: {best.score_edge:+.2f} pts"
         )
 
     if args.output:
         generate_html_report(analyzed, timestamp, args.output, sport=args.sport.upper(), top_value_bets=top_value_bets)
     
-    # Save raw data
+    # Persist the analyzed odds so projection and comparison fields are visible
+    # in odds_data.json instead of saving the pre-analysis scrape only.
+    data["odds"] = [odds.__dict__ for odds in odds_list]
     save_data_to_json(data, 'odds_data.json')
     
     print("Done!")

@@ -1,7 +1,8 @@
 import unittest
 
+from analysis.comparator import calculate_score_edge, projection_recommendation
 from analysis.normalizer import normalize_odds
-from models.odds import Odds
+from models.odds import Odds, Projection
 from props.covers_props import Prop, filter_props, parse_prop
 from scrapers.covers_games import SPORT_URLS, american_to_decimal, parse_market_cell
 
@@ -33,6 +34,29 @@ class OddsParsingTests(unittest.TestCase):
 
     def test_all_game_sports_have_covers_urls(self):
         self.assertEqual(set(SPORT_URLS), {"nba", "mlb", "nfl", "ncaaf"})
+
+    def test_projection_score_edge_supports_spread_and_total(self):
+        projection = Projection(
+            "covers", "game", "score", 7, "now",
+            event="Away @ Home", projected_spread=7, projected_total=52,
+        )
+        home_spread = Odds(
+            "Book", 1.91, "spread", "home", "now",
+            event="Away @ Pittsburgh Panthers", selection="PITT PITT -3.5",
+        )
+        over = Odds(
+            "Book", 1.91, "total", "home", "now",
+            event="Away @ Pittsburgh Panthers", selection="Home o45.5", line="o45.5",
+        )
+        projection.event = "Away @ Pittsburgh Panthers"
+        self.assertEqual(calculate_score_edge(home_spread, projection), 3.5)
+        self.assertEqual(calculate_score_edge(over, projection), 6.5)
+        over.selection = "Home u58.5"
+        over.line = "u58.5"
+        over.projected_spread = 7
+        over.projected_total = 52
+        over.score_edge = 6.5
+        self.assertTrue(projection_recommendation(over).startswith("UNDER"))
 
 
 class PropsParsingTests(unittest.TestCase):
