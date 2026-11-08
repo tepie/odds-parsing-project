@@ -37,7 +37,7 @@ class OddsParsingTests(unittest.TestCase):
         self.assertEqual(normalized[0].player, "team")
 
     def test_all_game_sports_have_covers_urls(self):
-        self.assertEqual(set(SPORT_URLS), {"nba", "mlb", "nfl", "ncaaf", "ncaab"})
+        self.assertEqual(set(SPORT_URLS), {"nba", "mlb", "nfl", "ncaaf", "ncaab", "nhl"})
 
     def test_projection_score_edge_supports_spread_and_total(self):
         projection = Projection(

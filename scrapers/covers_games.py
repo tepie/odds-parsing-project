@@ -14,6 +14,7 @@ SPORT_URLS = {
     'nfl': 'https://www.covers.com/picks/nfl',
     'ncaaf': 'https://www.covers.com/picks/ncaaf',
     'ncaab': 'https://www.covers.com/picks/ncaab',
+    'nhl': 'https://www.covers.com/picks/nhl',
 }
 
 TEAM_ALIASES = {

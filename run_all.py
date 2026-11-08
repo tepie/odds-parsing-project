@@ -23,7 +23,7 @@ from props.covers_props import extract_props, filter_props
 from playwright.sync_api import sync_playwright
 
 
-GAME_SPORTS = ("nba", "mlb", "nfl", "ncaaf", "ncaab")
+GAME_SPORTS = ("nba", "mlb", "nfl", "ncaaf", "ncaab", "nhl")
 PROP_SPORTS = ("nfl", "mlb")
 
 

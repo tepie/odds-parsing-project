@@ -24,7 +24,7 @@ def decimal_to_american(decimal_odds):
 
 def main():
     parser = argparse.ArgumentParser(description='Consolidate Covers sports odds review')
-    parser.add_argument('--sport', type=str, default='mlb', choices=['nba', 'mlb', 'nfl', 'ncaaf', 'ncaab'], help='Sport to collect (nba, mlb, nfl, ncaaf, or ncaab)')
+    parser.add_argument('--sport', type=str, default='mlb', choices=['nba', 'mlb', 'nfl', 'ncaaf', 'ncaab', 'nhl'], help='Sport to collect (nba, mlb, nfl, ncaaf, ncaab, or nhl)')
     parser.add_argument('--market', type=str, default='all', help='Market to focus on (e.g., home_run)')
     parser.add_argument('--output', type=str, default=None, help='Optional HTML output file')
     parser.add_argument('--outlier-method', type=str, default='zscore', choices=['zscore', 'iqr', 'none'], help='Outlier detection method')
