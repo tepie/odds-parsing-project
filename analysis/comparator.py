@@ -93,6 +93,23 @@ def _team_label_matches(label: str, team: str) -> bool:
     )
 
 
+def detect_moneyline_upset(event: str, sides: List[Odds], projection: Projection | None) -> str | None:
+    """Return the underdog side when Covers projects a moneyline upset."""
+    if not event or not sides or not projection or projection.projected_spread is None or len(sides) < 2:
+        return None
+
+    away, home = [part.strip() for part in event.split('@', 1)]
+    model_team = home if projection.projected_spread > 0 else away
+    market_favorite = min(sides, key=lambda item: item.odds)
+    market_favorite_team = market_favorite.selection if market_favorite else None
+    if not market_favorite_team or _team_label_matches(market_favorite_team, model_team):
+        return None
+
+    if any(item.selection and _team_label_matches(item.selection, model_team) for item in sides):
+        return model_team
+    return None
+
+
 def projection_recommendation(odds: Odds) -> str | None:
     """Describe the Covers score-model side supported by an odds record."""
     if not odds.event or odds.projected_spread is None:

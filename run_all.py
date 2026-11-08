@@ -11,6 +11,7 @@ from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
 from analysis.comparator import (
     analyze_comparisons,
+    detect_moneyline_upset,
     group_odds_by_player_market,
     projection_recommendation,
     _team_label_matches,
@@ -22,7 +23,7 @@ from props.covers_props import extract_props, filter_props
 from playwright.sync_api import sync_playwright
 
 
-GAME_SPORTS = ("nba", "mlb", "nfl", "ncaaf")
+GAME_SPORTS = ("nba", "mlb", "nfl", "ncaaf", "ncaab", "nhl")
 PROP_SPORTS = ("nfl", "mlb")
 
 
@@ -90,31 +91,18 @@ def collect_game_edges(sport: str, outlier_method: str, include_api: bool = Fals
         )
     for event, sides in moneylines.items():
         projection = next((item for item in projections if item.event and item.event.lower() == event.lower()), None)
-        if not projection or projection.projected_spread is None or len(sides) < 2:
+        model_team = detect_moneyline_upset(event, sides, projection)
+        if not model_team:
             continue
-        market_team = min(sides, key=lambda item: item.odds).selection
-        away, home = [part.strip() for part in event.split("@", 1)]
-        model_team = home if projection.projected_spread > 0 else away
-        market_favorite = next(
-            (item for item in sides if item.selection and _team_label_matches(item.selection, market_team or "")),
-            None,
-        )
-        market_favorite_team = market_favorite.selection if market_favorite else market_team
-        if market_favorite_team and not _team_label_matches(market_favorite_team, model_team):
-            model_side = next(
-                (item for item in sides if item.selection and _team_label_matches(item.selection, model_team)),
-                None,
+        edges.append(
+            Edge(
+                score=abs(projection.projected_spread),
+                sport=sport.upper(),
+                kind="GAME",
+                description=f"{event} | moneyline upset | {model_team}",
+                detail=f"predicted margin {projection.projected_spread:+.1f} pts",
             )
-            if model_side:
-                edges.append(
-                    Edge(
-                        score=abs(projection.projected_spread),
-                        sport=sport.upper(),
-                        kind="GAME",
-                        description=f"{event} | moneyline upset | {model_team}",
-                        detail=f"predicted margin {projection.projected_spread:+.1f} pts",
-                    )
-                )
+        )
     return edges
 
 

@@ -27,7 +27,7 @@ def collect_all_data(sport: str = 'mlb', include_api: bool = False) -> dict:
     """
     Scrape Covers and optional supplemental API data.
     """
-    if sport not in {'nba', 'mlb', 'nfl', 'ncaaf'}:
+    if sport not in {'nba', 'mlb', 'nfl', 'ncaaf', 'ncaab', 'nhl'}:
         raise ValueError(f'Unsupported sport: {sport}')
 
     print(f"Scraping Covers {sport.upper()} picks...")

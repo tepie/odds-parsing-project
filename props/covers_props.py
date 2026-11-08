@@ -149,10 +149,18 @@ def parse_prop(text: str, odds: str = "", game: str = "") -> Prop | None:
 def reveal_more_props(page: Page, sport: str, prop_types: list[str]) -> None:
     terms = " ".join(prop_types).casefold()
     market_name = None
-    if sport == "nfl" and "touchdown" in terms:
+    if sport == "nfl" and "first touchdown" in terms:
+        market_name = "nfl_game_player_score_first_touchdown"
+    elif sport == "nfl" and "touchdown" in terms:
         market_name = "nfl_game_player_score_touchdown"
     elif sport == "nfl" and "interception" in terms:
         market_name = "nfl_game_player_passing_interception"
+    elif sport == "nfl" and "passing yards" in terms:
+        market_name = "nfl_game_player_passing_yards"
+    elif sport == "nfl" and "rushing yards" in terms:
+        market_name = "nfl_game_player_rushing_yards"
+    elif sport == "nfl" and "receiving yards" in terms:
+        market_name = "nfl_game_player_receiving_yards"
     elif sport == "mlb":
         market_names = {
             "hit": "mlb_game_player_hits_runs_rbis",
@@ -257,7 +265,11 @@ def print_table(props: Iterable[Prop]) -> None:
         print("  ".join(value.ljust(widths[index]) for index, value in enumerate(row)))
 
 
-def filter_props(props: Iterable[Prop], prop_types: list[str]) -> list[Prop]:
+def filter_props(
+    props: Iterable[Prop],
+    prop_types: list[str],
+    min_projection: float = MIN_PROBABILITY_PROJECTION,
+) -> list[Prop]:
     terms = [
         term.strip().casefold()
         for value in prop_types
@@ -270,14 +282,14 @@ def filter_props(props: Iterable[Prop], prop_types: list[str]) -> list[Prop]:
         if prop.position != "GAME"
         if not terms or any(term in f"{prop.market} {prop.selection}".casefold() for term in terms)
     ]
-    return [prop for prop in filtered if is_reportable_edge(prop)]
+    return [prop for prop in filtered if is_reportable_edge(prop, min_projection)]
 
 
-def is_reportable_edge(prop: Prop) -> bool:
+def is_reportable_edge(prop: Prop, min_projection: float = MIN_PROBABILITY_PROJECTION) -> bool:
     prop_text = f"{prop.market} {prop.selection}".casefold()
     is_probability_prop = any(term in prop_text for term in PROBABILITY_PROP_TERMS)
     return not is_probability_prop or (
-        prop.projection is not None and prop.projection > MIN_PROBABILITY_PROJECTION
+        prop.projection is not None and prop.projection >= min_projection
     )
 
 
@@ -286,6 +298,10 @@ def main() -> int:
     parser.add_argument("--sport", choices=tuple(SPORT_URLS), default="nfl")
     parser.add_argument("--url", help="Override the default Covers props URL")
     parser.add_argument("--limit", type=int, default=25)
+    parser.add_argument(
+        "--min-projection", type=float, default=MIN_PROBABILITY_PROJECTION,
+        help="Minimum probability projection for touchdown/interception props (default: 0.40)",
+    )
     parser.add_argument("--prop-type", action="append", default=[], metavar="TEXT",
                         help="Keep props whose market or selection contains TEXT; repeat or use commas for alternatives")
     parser.add_argument("--format", choices=("table", "json", "csv"), default="table")
@@ -298,7 +314,11 @@ def main() -> int:
             browser = playwright.chromium.launch(headless=not args.headed)
             page = browser.new_page(viewport={"width": 1440, "height": 1000})
             page.goto(args.url or SPORT_URLS[args.sport], wait_until="domcontentloaded", timeout=60_000)
-            props = filter_props(extract_props(page, args.sport, args.prop_type), args.prop_type)[: max(args.limit, 0)]
+            props = filter_props(
+                extract_props(page, args.sport, args.prop_type),
+                args.prop_type,
+                args.min_projection,
+            )[: max(args.limit, 0)]
             browser.close()
     except PlaywrightTimeoutError as error:
         print(f"Timed out waiting for Covers props: {error}", file=sys.stderr)

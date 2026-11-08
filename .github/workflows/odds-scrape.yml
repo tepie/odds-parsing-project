@@ -2,25 +2,68 @@ name: Odds Scrape
 
 on:
   workflow_dispatch:
+    inputs:
+      include_api:
+        description: Include The Odds API in the run
+        required: false
+        default: false
+        type: boolean
+      limit:
+        description: Global result limit for odds output
+        required: false
+        default: 25
+        type: number
+  schedule:
+    - cron: '0 11 * * *'
 
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    
+    timeout-minutes: 45
+    env:
+      PYTHONUNBUFFERED: '1'
+
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          python -m playwright install chromium
-      
-      - name: Run all sports odds scrape
+          python -m pip install -r requirements.txt
+          python -m playwright install --with-deps chromium
+
+      - name: Run full game-edge scrape
+        env:
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
         run: |
-          python run_all.py
+          ARGS="--limit 25"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            ARGS="--limit ${{ inputs.limit }}"
+            if [ "${{ inputs.include_api }}" = "true" ]; then
+              ARGS="$ARGS --include-odds-api"
+            fi
+          fi
+          echo "Running: python run_all.py $ARGS"
+          python run_all.py $ARGS
+
+      - name: Build daily best odds summary
+        run: |
+          python scripts/daily_best_odds.py --limit 25
+
+      - name: Upload scrape artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: odds-scrape-artifacts
+          path: |
+            odds_data.json
+            nfl_touchdowns.json
+            nfl_passing_yards.json
+            mlb_home_runs.json
+            daily_best_odds.md
+          if-no-files-found: warn
