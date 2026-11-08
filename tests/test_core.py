@@ -1,6 +1,10 @@
 import unittest
 
-from analysis.comparator import calculate_score_edge, projection_recommendation
+from analysis.comparator import (
+    calculate_score_edge,
+    detect_moneyline_upset,
+    projection_recommendation,
+)
 from analysis.normalizer import normalize_odds
 from models.odds import Odds, Projection
 from props.covers_props import Prop, filter_props, parse_prop
@@ -33,7 +37,7 @@ class OddsParsingTests(unittest.TestCase):
         self.assertEqual(normalized[0].player, "team")
 
     def test_all_game_sports_have_covers_urls(self):
-        self.assertEqual(set(SPORT_URLS), {"nba", "mlb", "nfl", "ncaaf"})
+        self.assertEqual(set(SPORT_URLS), {"nba", "mlb", "nfl", "ncaaf", "ncaab"})
 
     def test_projection_score_edge_supports_spread_and_total(self):
         projection = Projection(
@@ -58,6 +62,32 @@ class OddsParsingTests(unittest.TestCase):
         over.score_edge = 6.5
         self.assertTrue(projection_recommendation(over).startswith("UNDER"))
 
+    def test_detect_moneyline_upset_flags_model_side_when_market_favorite_differs(self):
+        projection = Projection(
+            "covers", "game", "score", 7, "now",
+            event="Away @ Home", projected_spread=7, projected_total=52,
+        )
+        sides = [
+            Odds("Book A", 1.55, "moneyline", "away", "now", event="Away @ Home", selection="Away"),
+            Odds("Book A", 2.40, "moneyline", "home", "now", event="Away @ Home", selection="Home"),
+        ]
+        self.assertEqual(detect_moneyline_upset("Away @ Home", sides, projection), "Home")
+
+        sides = [
+            Odds("Book A", 1.30, "moneyline", "away", "now", event="Away @ Home", selection="Away"),
+            Odds("Book B", 1.55, "moneyline", "home", "now", event="Away @ Home", selection="Home"),
+        ]
+        self.assertIsNone(detect_moneyline_upset("Away @ Home", sides, Projection(
+            "covers", "game", "score", 7, "now",
+            event="Away @ Home", projected_spread=-7, projected_total=52,
+        )))
+
+        projection = Projection(
+            "covers", "game", "score", 7, "now",
+            event="Away @ Home", projected_spread=7, projected_total=52,
+        )
+        self.assertEqual(detect_moneyline_upset("Away @ Home", sides, projection), "Home")
+
 
 class PropsParsingTests(unittest.TestCase):
     def test_parse_nfl_prop(self):
@@ -79,6 +109,17 @@ class PropsParsingTests(unittest.TestCase):
         )
         filtered = filter_props([game_prop, player_prop], [])
         self.assertEqual(filtered, [player_prop])
+
+    def test_probability_prop_minimum_projection_is_configurable(self):
+        touchdown_prop = Prop(
+            "Player One", "RB", "Anytime Touchdown", "Anytime Touchdown",
+            None, 0.20, 23.7, 23.67, "+265", "TEN @ BAL",
+        )
+        self.assertEqual(filter_props([touchdown_prop], ["touchdowns"]), [])
+        self.assertEqual(
+            filter_props([touchdown_prop], ["touchdowns"], min_projection=0.20),
+            [touchdown_prop],
+        )
 
 
 if __name__ == "__main__":

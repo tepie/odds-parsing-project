@@ -168,6 +168,7 @@ Filter props and choose structured output:
 
 ```bash
 ./props/run_covers_props.sh --sport nfl --prop-type touchdowns --limit 50
+./props/run_covers_props.sh --sport nfl --prop-type touchdowns --min-projection 0.20 --limit 50
 ./props/run_covers_props.sh --sport mlb --prop-type "home runs" --limit 50
 ./props/run_covers_props.sh --format json --output props.json
 ./props/run_covers_props.sh --format csv --output props.csv
