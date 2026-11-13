@@ -190,6 +190,29 @@ def find_best_odds(comparison: OddsComparison) -> Odds:
         return None
     return max(comparison.odds_list, key=lambda o: o.odds)
 
+
+def select_moneyline_underdogs(
+    comparisons: Dict[str, OddsComparison],
+) -> List[OddsComparison]:
+    """Keep only the higher-priced moneyline side for each two-way event."""
+    events: dict[str, list[tuple[OddsComparison, float]]] = defaultdict(list)
+    for comparison in comparisons.values():
+        if comparison.market != "moneyline" or not comparison.odds_list:
+            continue
+        event = comparison.odds_list[0].event
+        if not event:
+            continue
+        median_odds = statistics.median(odds.odds for odds in comparison.odds_list)
+        events[event.casefold().strip()].append((comparison, median_odds))
+
+    underdogs = []
+    for sides in events.values():
+        if len(sides) != 2 or sides[0][1] == sides[1][1]:
+            continue
+        underdogs.append(max(sides, key=lambda side: side[1])[0])
+    return underdogs
+
+
 def calculate_blended_score(comparison: OddsComparison) -> float:
     """
     Blended score: average odds weighted by book reliability or simple average

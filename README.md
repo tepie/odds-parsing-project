@@ -215,7 +215,7 @@ The default game scan does not query The Odds API, so it does not consume API cr
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `--sport` | `mlb` | `nba`, `mlb`, `nfl`, or `ncaaf`; Covers is queried for the selected sport. |
-| `--market` | `all` | Keep one normalized market, such as `home_runs`, `home_run`, or `first_inning_total_runs`. The exact value must match scraper output. |
+| `--market` | `all` | Keep one normalized market, such as `spread`, `moneyline`, `home_runs`, or `first_inning_total_runs`. For `moneyline`, the console prints only the market underdog for each two-way event, based on the median decimal price across available books. |
 | `--output` | unset | Optional HTML report path. Omit it for console-only output. |
 | `--outlier-method` | `zscore` | `zscore`, `iqr`, or `none`; filtering is performed separately for each player/market group. |
 | `--bookmakers` | unset | Optional bookmaker filter for raw records; it does not affect projection-edge ranking. |

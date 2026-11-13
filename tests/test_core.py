@@ -4,6 +4,8 @@ from analysis.comparator import (
     calculate_score_edge,
     detect_moneyline_upset,
     projection_recommendation,
+    select_moneyline_underdogs,
+    group_odds_by_player_market,
 )
 from analysis.normalizer import normalize_odds
 from models.odds import Odds, Projection
@@ -87,6 +89,28 @@ class OddsParsingTests(unittest.TestCase):
             event="Away @ Home", projected_spread=7, projected_total=52,
         )
         self.assertEqual(detect_moneyline_upset("Away @ Home", sides, projection), "Home")
+
+    def test_select_moneyline_underdog_returns_one_side_per_event(self):
+        sides = [
+            Odds("Book A", 1.50, "moneyline", "away", "now", event="Away @ Home", selection="Away"),
+            Odds("Book B", 1.52, "moneyline", "away", "now", event="Away @ Home", selection="Away"),
+            Odds("Book A", 2.40, "moneyline", "home", "now", event="Away @ Home", selection="Home"),
+            Odds("Book B", 2.30, "moneyline", "home", "now", event="Away @ Home", selection="Home"),
+        ]
+        comparisons = group_odds_by_player_market(sides, [])
+
+        underdogs = select_moneyline_underdogs(comparisons)
+
+        self.assertEqual(len(underdogs), 1)
+        self.assertEqual(underdogs[0].odds_list[0].selection, "Home")
+
+    def test_select_moneyline_underdog_skips_equal_prices(self):
+        sides = [
+            Odds("Book A", 1.90, "moneyline", "away", "now", event="Away @ Home", selection="Away"),
+            Odds("Book A", 1.90, "moneyline", "home", "now", event="Away @ Home", selection="Home"),
+        ]
+
+        self.assertEqual(select_moneyline_underdogs(group_odds_by_player_market(sides, [])), [])
 
 
 class PropsParsingTests(unittest.TestCase):

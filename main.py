@@ -11,6 +11,7 @@ from analysis.comparator import (
     find_top_value_bets,
     projection_recommendation,
     events_match,
+    select_moneyline_underdogs,
 )
 from analysis.outliers import remove_outliers
 from reports.generator import generate_html_report
@@ -59,7 +60,6 @@ def main():
     # Filter by market if specified
     if args.market != 'all':
         odds_list = [o for o in odds_list if o.market == args.market]
-        projections = [p for p in projections if p.market == args.market]
     
     # Remove outliers
     if args.outlier_method != 'none':
@@ -99,6 +99,8 @@ def main():
         key=ranking_key,
         reverse=True,
     )
+    if args.market == 'moneyline':
+        ranked_comparisons = select_moneyline_underdogs(analyzed)
     if args.limit is not None:
         if args.limit < 1:
             parser.error('--limit must be at least 1')
@@ -117,6 +119,18 @@ def main():
             ),
             None,
         )
+        if best.market == 'moneyline':
+            predicted = (
+                f"{projection.away_score:.2f}-{projection.home_score:.2f}"
+                if projection and projection.away_score is not None and projection.home_score is not None
+                else "projection unavailable"
+            )
+            american_odds = decimal_to_american(best.odds)
+            print(
+                f"{event} | predicted: {predicted} | "
+                f"moneyline   | Underdog: {selection} ({american_odds:+d})"
+            )
+            continue
         if not projection or best.score_edge is None:
             continue
         predicted = f"{projection.away_score:.2f}-{projection.home_score:.2f}"
