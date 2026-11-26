@@ -100,7 +100,7 @@ def main():
         reverse=True,
     )
     if args.market == 'moneyline':
-        ranked_comparisons = select_moneyline_underdogs(analyzed)
+        ranked_comparisons = select_moneyline_underdogs(analyzed, projections)
     if args.limit is not None:
         if args.limit < 1:
             parser.error('--limit must be at least 1')
