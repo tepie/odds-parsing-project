@@ -4,6 +4,8 @@ from analysis.comparator import (
     calculate_score_edge,
     detect_moneyline_upset,
     projection_recommendation,
+    select_moneyline_underdogs,
+    group_odds_by_player_market,
 )
 from analysis.normalizer import normalize_odds
 from models.odds import Odds, Projection
@@ -87,6 +89,93 @@ class OddsParsingTests(unittest.TestCase):
             event="Away @ Home", projected_spread=7, projected_total=52,
         )
         self.assertEqual(detect_moneyline_upset("Away @ Home", sides, projection), "Home")
+
+    def test_select_moneyline_underdog_returns_one_side_per_event(self):
+        sides = [
+            Odds("Book A", 1.50, "moneyline", "away", "now", event="Away @ Home", selection="Away"),
+            Odds("Book B", 1.52, "moneyline", "away", "now", event="Away @ Home", selection="Away"),
+            Odds("Book A", 2.40, "moneyline", "home", "now", event="Away @ Home", selection="Home"),
+            Odds("Book B", 2.30, "moneyline", "home", "now", event="Away @ Home", selection="Home"),
+        ]
+        comparisons = group_odds_by_player_market(sides, [])
+        projection = Projection(
+            "covers", "game", "score", 3, "now",
+            event="Away @ Home", away_score=20, home_score=17,
+        )
+
+        underdogs = select_moneyline_underdogs(comparisons, [projection])
+
+        self.assertEqual(len(underdogs), 1)
+        self.assertEqual(underdogs[0].odds_list[0].selection, "Home")
+
+    def test_select_moneyline_underdog_skips_projection_more_than_three_points_behind(self):
+        sides = [
+            Odds("Book", 1.20, "moneyline", "away", "now", event="Away @ Home", selection="Away"),
+            Odds("Book", 4.50, "moneyline", "home", "now", event="Away @ Home", selection="Home"),
+        ]
+        projection = Projection(
+            "covers", "game", "score", 12, "now",
+            event="Away @ Home", away_score=28, home_score=16,
+        )
+
+        self.assertEqual(
+            select_moneyline_underdogs(group_odds_by_player_market(sides, []), [projection]),
+            [],
+        )
+
+    def test_select_moneyline_underdog_keeps_projected_winner(self):
+        sides = [
+            Odds("Book", 1.40, "moneyline", "away", "now", event="Away @ Home", selection="Away"),
+            Odds("Book", 3.20, "moneyline", "home", "now", event="Away @ Home", selection="Home"),
+        ]
+        projection = Projection(
+            "covers", "game", "score", 4, "now",
+            event="Away @ Home", away_score=17, home_score=21,
+        )
+
+        underdogs = select_moneyline_underdogs(
+            group_odds_by_player_market(sides, []), [projection]
+        )
+
+        self.assertEqual(len(underdogs), 1)
+        self.assertEqual(underdogs[0].odds_list[0].selection, "Home")
+
+    def test_select_moneyline_underdog_skips_tcu_when_projection_trails_by_sixteen(self):
+        event = "TCU Horned Frogs @ Texas Tech Red Raiders"
+        sides = [
+            Odds("Book", 1.15, "moneyline", "texas tech", "now", event=event,
+                 selection="Texas Tech Red Raiders"),
+            Odds("Book", 6.50, "moneyline", "tcu", "now", event=event,
+                 selection="TCU Horned Frogs"),
+        ]
+        projection = Projection(
+            "covers", "game", "score", 15.87, "now",
+            event=event, away_score=16.24, home_score=32.11,
+        )
+
+        self.assertEqual(
+            select_moneyline_underdogs(
+                group_odds_by_player_market(sides, []), [projection]
+            ),
+            [],
+        )
+
+    def test_select_moneyline_underdog_skips_equal_prices(self):
+        sides = [
+            Odds("Book A", 1.90, "moneyline", "away", "now", event="Away @ Home", selection="Away"),
+            Odds("Book A", 1.90, "moneyline", "home", "now", event="Away @ Home", selection="Home"),
+        ]
+
+        projection = Projection(
+            "covers", "game", "score", 0, "now",
+            event="Away @ Home", away_score=20, home_score=20,
+        )
+        self.assertEqual(
+            select_moneyline_underdogs(
+                group_odds_by_player_market(sides, []), [projection]
+            ),
+            [],
+        )
 
 
 class PropsParsingTests(unittest.TestCase):

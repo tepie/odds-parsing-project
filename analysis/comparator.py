@@ -190,6 +190,71 @@ def find_best_odds(comparison: OddsComparison) -> Odds:
         return None
     return max(comparison.odds_list, key=lambda o: o.odds)
 
+
+def select_moneyline_underdogs(
+    comparisons: Dict[str, OddsComparison],
+    projections: List[Projection],
+    max_projected_deficit: float = 3.0,
+) -> List[OddsComparison]:
+    """Keep market underdogs projected to win or finish within the allowed deficit."""
+    events: dict[str, list[tuple[OddsComparison, float, str]]] = defaultdict(list)
+    for comparison in comparisons.values():
+        if comparison.market != "moneyline" or not comparison.odds_list:
+            continue
+        first_odds = comparison.odds_list[0]
+        if not first_odds.event or not first_odds.selection:
+            continue
+        median_odds = statistics.median(odds.odds for odds in comparison.odds_list)
+        events[first_odds.event.casefold().strip()].append(
+            (comparison, median_odds, first_odds.selection)
+        )
+
+    underdogs = []
+    for event_sides in events.values():
+        sides = [(comparison, price) for comparison, price, _ in event_sides]
+        if len(sides) != 2 or sides[0][1] == sides[1][1]:
+            continue
+        underdog_index = max(range(2), key=lambda index: sides[index][1])
+        underdog, _ = sides[underdog_index]
+        dog_selection = event_sides[underdog_index][2]
+        favorite_selection = event_sides[1 - underdog_index][2]
+        event = underdog.odds_list[0].event
+        if not event:
+            continue
+        projection = next(
+            (
+                item for item in projections
+                if item.event and events_match(event, item.event)
+            ),
+            None,
+        )
+        if (
+            not projection
+            or projection.away_score is None
+            or projection.home_score is None
+        ):
+            continue
+
+        away, home = [part.strip() for part in event.split("@", 1)]
+        if _team_label_matches(dog_selection, away):
+            dog_score = projection.away_score
+        elif _team_label_matches(dog_selection, home):
+            dog_score = projection.home_score
+        else:
+            continue
+
+        if _team_label_matches(favorite_selection, away):
+            favorite_score = projection.away_score
+        elif _team_label_matches(favorite_selection, home):
+            favorite_score = projection.home_score
+        else:
+            continue
+
+        if dog_score >= favorite_score - max_projected_deficit:
+            underdogs.append(underdog)
+    return underdogs
+
+
 def calculate_blended_score(comparison: OddsComparison) -> float:
     """
     Blended score: average odds weighted by book reliability or simple average
